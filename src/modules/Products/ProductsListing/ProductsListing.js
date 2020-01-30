@@ -7,12 +7,14 @@ import Grid from '@material-ui/core/Grid';
 import Snackbar from '@material-ui/core/Snackbar';
 
 import ProductCard from './components/ProductCard';
+import { TextField } from '@material-ui/core';
 
 
 const initialState = {
   page: 0,
   perPage: 10,
   error: null,
+  search: '',
 };
 
 class ProductsListing extends PureComponent {
@@ -37,27 +39,53 @@ class ProductsListing extends PureComponent {
   };
 
   onPageChange = (event, nextPage) => {
+    this.setPage(nextPage);
+  };
+
+  setPage(page) {
     this.setState(
-      { page: nextPage },
+      { page, },
       () => {
         window.scrollTo(0, 0);
       },
     );
-  };
+  }
 
-  getProductsForPage() {
-    const { page, perPage } = this.state;
+  onSearchChange = ({ target: { value } }) => {
+    this.setPage(initialState.page);
+    this.setState(
+      { search: value },
+    );
+  };
+  // TODO: should be mobx computed
+  getFilteredProducts() {
+    const { search } = this.state;
     const { productsStore } = this.props;
+
+    if (!search || productsStore.isEmpty) {
+      return productsStore.products;
+    }
+
+    return productsStore.products
+      .filter(
+        (product) => product.name.toLowerCase().includes(search.toLowerCase())
+      )
+  }
+
+  getProductsForPage(productsForSlice) {
+    const { page, perPage } = this.state;
 
     const start = page * perPage;
     const end = start + perPage;
 
-    return productsStore.products.slice(start, end);
+    return productsForSlice.slice(start, end);
   }
 
   render() {
-    const { page, perPage, error } = this.state;
+    const { page, perPage, error, search } = this.state;
     const { productsStore } = this.props;
+
+    const filteredProducts = this.getFilteredProducts();
 
     if (productsStore.loading) {
       return (
@@ -67,19 +95,24 @@ class ProductsListing extends PureComponent {
       );
     }
 
+    const hasItems = Boolean(filteredProducts.length);
+
     return (
       <>
-        <Snackbar
-          open={Boolean(error)}
-          onClose={this.clearError}
-          message={error}
-        />
+        <Box pb={2}>
+          <TextField value={search} onChange={this.onSearchChange} placeholder="Search for product" />
+        </Box>
+        {(!hasItems && search) && (
+          <Box p={2} textAlign="center">
+            Any products for search request
+          </Box>
+        )}
         {
-          !productsStore.isEmpty && (
+          hasItems && (
             <>
               <Grid container spacing={2} justify="center">
                 {
-                  this.getProductsForPage()
+                  this.getProductsForPage(filteredProducts)
                     .map(
                       (
                         product
@@ -95,7 +128,7 @@ class ProductsListing extends PureComponent {
                 component="nav"
                 page={page}
                 rowsPerPage={perPage}
-                count={productsStore.length}
+                count={filteredProducts.length}
                 onChangePage={this.onPageChange}
                 labelRowsPerPage={null}
                 rowsPerPageOptions={[]} // Hide items per page select
@@ -103,6 +136,11 @@ class ProductsListing extends PureComponent {
             </>
           )
         }
+        <Snackbar
+          open={Boolean(error)}
+          onClose={this.clearError}
+          message={error}
+        />
       </>
     );
   }
